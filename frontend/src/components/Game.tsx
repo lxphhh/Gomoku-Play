@@ -66,22 +66,11 @@ export default function Game({ mode, onModeChange }: GameProps) {
 
     newBoard[position.row][position.col] = gameState.currentPlayer;
 
-    const { win, winningLine: line } = checkWin(newBoard, position, gameState.currentPlayer);
-    const draw = checkDraw(newBoard);
-
-    const newMove = {
-      position,
-      player: gameState.currentPlayer,
-      timestamp: Date.now(),
-    };
-
-    const newMoves = [...gameState.moves, newMove];
-
-    let newStatus = gameState.status;
+    let newStatus: typeof gameState.status = 'playing';
     let newWinner: Player | null = null;
 
     if (win) {
-      newStatus = `${gameState.currentPlayer}_win` as const;
+      newStatus = `${gameState.currentPlayer}_win`;
       newWinner = gameState.currentPlayer;
       setWinningLine(line);
     } else if (draw) {
