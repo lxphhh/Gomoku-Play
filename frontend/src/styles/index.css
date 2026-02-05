@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --board-size: 15;
+  --cell-size: 32px;
+  --piece-size: 28px;
+}
+
+body {
+  @apply bg-gray-100 min-h-screen;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* 五子棋棋盘样式 */
+.board-container {
+  @apply bg-board-light rounded-lg shadow-2xl p-4;
+  border: 4px solid #8B5E3C;
+}
+
+/* 棋子样式 */
+.stone {
+  @apply rounded-full shadow-md;
+  transition: all 0.2s ease-out;
+}
+
+.stone:hover {
+  transform: scale(1.05);
+}
+
+.stone.black {
+  background: radial-gradient(circle at 30% 30%, #4a4a4a, #1a1a1a);
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.stone.white {
+  background: radial-gradient(circle at 30% 30%, #ffffff, #d0d0d0);
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* 最后落子标记 */
+.last-move {
+  @apply relative;
+}
+
+.last-move::after {
+  content: '';
+  @apply absolute w-2 h-2 rounded-full bg-red-500;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* 获胜连线 */
+.winning-line {
+  @apply absolute bg-red-500 rounded;
+  opacity: 0.7;
+  z-index: 10;
+}
