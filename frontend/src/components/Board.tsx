@@ -1,5 +1,6 @@
 import React from 'react';
-import { useState, useEffect, useRef, Position, StoneColor } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Position, StoneColor } from '../types';
 
 interface BoardProps {
   board: StoneColor[][];
