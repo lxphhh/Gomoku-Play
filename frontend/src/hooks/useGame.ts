@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   GameState,
   GameConfig,
@@ -6,6 +6,7 @@ import {
   Move,
   Player,
   GameStatus,
+  BoardData,
 } from '../types';
 import {
   createEmptyBoard,
@@ -44,7 +45,6 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
       moves: [],
       winner: null,
       mode: config.mode,
-      isAIFirst: config.mode === 'pva' ? true : undefined,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -132,15 +132,6 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
         updatedAt: Date.now(),
       }));
 
-      // 如果游戏继续且是 PvA 模式，安排 AI 落子
-      if (
-        newStatus === 'playing' &&
-        config.mode === 'pva' &&
-        player !== config.isAIFirst
-      ) {
-        // AI 落子会在 useEffect 中处理
-      }
-
       return true;
     },
     [gameState, config, checkGameEnd]
@@ -189,7 +180,6 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
       moves: [],
       winner: null,
       mode: config.mode,
-      isAIFirst: config.mode === 'pva' ? true : undefined,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -203,7 +193,6 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
     setGameState((prev) => ({
       ...prev,
       mode,
-      isAIFirst: mode === 'pva' ? true : undefined,
     }));
     restartGame();
   }, [restartGame]);

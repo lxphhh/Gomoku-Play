@@ -1,4 +1,4 @@
-import { BoardData, Position, StoneColor, GameStatus, Player, GameConfig } from '../types';
+import { BoardData, Position, GameStatus, Player, GameConfig } from '../types';
 
 // 创建空棋盘
 export const createEmptyBoard = (size: number): BoardData => {
