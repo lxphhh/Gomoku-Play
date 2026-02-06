@@ -146,7 +146,7 @@ export const getAIMove = async (
       return null;
     }
 
-    const data: AIGenerationResponse = await response.json();
+    const data = await response.json() as AIGenerationResponse;
     const content = data.choices[0]?.message?.content || '';
     
     console.log('[DeepSeek] API 响应:', content);

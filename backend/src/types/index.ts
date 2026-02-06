@@ -1,7 +1,5 @@
-export interface BoardData {
-  [row: number]: {
-    [col: number]: string | null;
-  };
+export interface BoardData extends Array<Array<string | null>> {
+  length: number;
 }
 
 export interface Position {
