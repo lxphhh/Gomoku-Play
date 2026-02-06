@@ -1,7 +1,8 @@
 import { Position, BoardData } from '../types';
 
 // DeepSeek API 配置
-const DEEPSEEK_API_URL = import.meta.env.VITE_DEEPSEEK_API_URL || 'https://api.deepseek.com/v1';
+// 正确端点：https://api.deepseek.com/chat/completions（无需 /v1）
+const DEEPSEEK_API_URL = import.meta.env.VITE_DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions';
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || '';
 const DEEPSEEK_MODEL = (import.meta.env.VITE_DEEPSEEK_MODEL || 'deepseek-chat').trim();
 const DEEPSEEK_TIMEOUT = parseInt(import.meta.env.VITE_DEEPSEEK_TIMEOUT || '30000', 10);
@@ -111,7 +112,7 @@ export const getAIMove = async (
   try {
     const prompt = buildPrompt(board, currentPlayer);
     
-    console.log('[DeepSeek] 发送请求, model:', DEEPSEEK_MODEL);
+    console.log('[DeepSeek] 发送请求...');
     
     const response = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
@@ -120,7 +121,7 @@ export const getAIMove = async (
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: DEEPSEEK_MODEL,  // 确保没有空格
+        model: DEEPSEEK_MODEL,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 100,
         temperature: 0.3,
