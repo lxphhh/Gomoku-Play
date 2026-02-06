@@ -1,30 +1,10 @@
 import { Position, BoardData } from '../types';
 
-// DeepSeek API 配置 (从环境变量读取，Vercel 中配置)
+// DeepSeek API 配置 (从环境变量读取)
 const DEEPSEEK_API_URL = import.meta.env.VITE_DEEPSEEK_API_URL || 'https://api.deepseek.com';
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || '';
 const DEEPSEEK_MODEL = import.meta.env.VITE_DEEPSEEK_MODEL || 'deepseek-chat';
-const DEEPSEEK_TIMEOUT = parseInt(import.meta.env.VITE_DEEPSEEK_TIMEOUT || '60000', 10);
-
-export interface AIGenerationResponse {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
-  choices: Array<{
-    index: number;
-    message: {
-      role: string;
-      content: string;
-    };
-    finish_reason: string;
-  }>;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
+const DEEPSEEK_TIMEOUT = parseInt(import.meta.env.VITE_DEEPSEEK_TIMEOUT || '30000', 10);
 
 /**
  * 将棋盘转换为字符串表示
@@ -33,7 +13,6 @@ export const boardToString = (board: BoardData): string => {
   const size = board.length;
   let result = '   ';
   
-  // 添加列标题
   for (let c = 0; c < size; c++) {
     result += ` ${c + 1} `;
   }
@@ -58,48 +37,91 @@ export const boardToString = (board: BoardData): string => {
 };
 
 /**
- * 构建 AI 提示词
+ * 构建 AI 提示词（简化版）
  */
 export const buildAIPrompt = (
   board: BoardData,
   currentPlayer: 'black' | 'white',
-  size: number = 15
+  _size: number = 15
 ): string => {
   const boardStr = boardToString(board);
-  const playerEmoji = currentPlayer === 'black' ? '●' : '○';
-  const opponentEmoji = currentPlayer === 'black' ? '○' : '●';
   
   return `
-# 五子棋 AI 对话
+# 五子棋 AI
 
-你是一个五子棋 AI 助手，请根据当前棋盘局势给出最佳落子位置。
-
-## 棋盘状态
+当前棋盘（●黑 ○白，坐标从0开始）：
 ${boardStr}
 
-## 当前信息
-- 当前执子方: ${playerEmoji} (${currentPlayer})
-- 对手执子方: ${opponentEmoji}
-- 棋盘尺寸: ${size}x${size}
-- 胜利条件: 连成5子
+当前执子：${currentPlayer}
 
-## 要求
-1. 分析当前棋盘局势
-2. 找出最佳落子位置
-3. 考虑进攻（形成连子）和防守（阻止对手连子）
-4. 返回格式: JSON 对象，包含 "row" 和 "col" 字段（从 0 开始计数）
-
-## 示例返回格式
-\`\`\`json
-{
-  "row": 7,
-  "col": 8,
-  "reasoning": "在 (7,8) 落子可以形成活三，同时阻止对手的冲四"
-}
-\`\`\`
-
-请直接返回 JSON 对象，不要添加其他内容。
+直接返回 JSON：
+{"row": 数字, "col": 数字}
 `;
+};
+
+/**
+ * 备用：随机落子
+ */
+export const getRandomMove = (board: BoardData): Position | null => {
+  const size = board.length;
+  const emptyCells: Position[] = [];
+  
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (board[r][c] === null) {
+        emptyCells.push({ row: r, col: c });
+      }
+    }
+  }
+  
+  if (emptyCells.length === 0) return null;
+  
+  const randomIndex = Math.floor(Math.random() * emptyCells.length);
+  return emptyCells[randomIndex];
+};
+
+/**
+ * 解析 AI 返回的位置
+ */
+const parseAIMove = (content: string, size: number): Position | null => {
+  try {
+    // 尝试多种格式提取 JSON
+    let jsonStr = content;
+    
+    // 格式1: ```json {...}```
+    const match1 = content.match(/```json\s*([\s\S]*?)\s*```/);
+    if (match1) jsonStr = match1[1];
+    
+    // 格式2: ```{...}```
+    const match2 = content.match(/```\s*([\s\S]*?)\s*```/);
+    if (match2) jsonStr = match2[1];
+    
+    // 格式3: {"row": 数字, "col": 数字}
+    const match3 = content.match(/\{[\s\S]*\}/);
+    if (match3) jsonStr = match3[0];
+    
+    console.log('[DeepSeek] 解析内容:', jsonStr);
+    
+    const parsed = JSON.parse(jsonStr);
+    
+    if (typeof parsed.row === 'number' && typeof parsed.col === 'number') {
+      const position: Position = {
+        row: Math.max(0, Math.min(size - 1, Math.floor(parsed.row))),
+        col: Math.max(0, Math.min(size - 1, Math.floor(parsed.col))),
+      };
+      
+      // 验证位置
+      if (position.row >= 0 && position.row < size && position.col >= 0 && position.col < size) {
+        return position;
+      }
+    }
+    
+    console.error('[DeepSeek] 解析结果无效:', parsed);
+    return null;
+  } catch (e) {
+    console.error('[DeepSeek] JSON 解析失败:', e, '内容:', content);
+    return null;
+  }
 };
 
 /**
@@ -110,15 +132,16 @@ export const getAIMove = async (
   currentPlayer: 'black' | 'white',
   size: number = 15
 ): Promise<Position | null> => {
+  // 检查 API Key
   if (!DEEPSEEK_API_KEY) {
-    console.error('[DeepSeek] API Key 未配置');
-    return null;
+    console.warn('[DeepSeek] API Key 未配置，使用随机落子');
+    return getRandomMove(board);
   }
 
   try {
     const prompt = buildAIPrompt(board, currentPlayer, size);
     
-    console.log('[DeepSeek] 正在调用 API...');
+    console.log('[DeepSeek] 发送请求...');
     
     const response = await fetch(`${DEEPSEEK_API_URL}/chat/completions`, {
       method: 'POST',
@@ -128,14 +151,9 @@ export const getAIMove = async (
       },
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        max_tokens: 500,
-        temperature: 0.7,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 100,
+        temperature: 0.3,
       }),
       signal: AbortSignal.timeout(DEEPSEEK_TIMEOUT),
     });
@@ -143,47 +161,32 @@ export const getAIMove = async (
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[DeepSeek] API 错误:', response.status, errorText);
-      return null;
+      return getRandomMove(board);
     }
 
-    const data = await response.json() as AIGenerationResponse;
-    const content = data.choices[0]?.message?.content || '';
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
     
-    console.log('[DeepSeek] API 响应:', content);
+    console.log('[DeepSeek] 原始响应:', content);
     
-    // 解析 JSON 响应
-    try {
-      // 尝试提取 JSON 代码块
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/\{[\s\S]*\}/);
-      const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : content;
-      const parsed = JSON.parse(jsonStr);
-      
-      if (parsed.row !== undefined && parsed.col !== undefined) {
-        const position: Position = {
-          row: parseInt(String(parsed.row), 10),
-          col: parseInt(String(parsed.col), 10),
-        };
-        
-        // 验证位置有效性
-        if (
-          position.row >= 0 &&
-          position.row < size &&
-          position.col >= 0 &&
-          position.col < size
-        ) {
-          console.log('[DeepSeek] AI 建议落子:', position);
-          return position;
-        } else {
-          console.error('[DeepSeek] AI 返回位置超出棋盘范围:', position);
-        }
-      }
-    } catch (parseError) {
-      console.error('[DeepSeek] JSON 解析错误:', parseError, '原始内容:', content);
+    if (!content) {
+      console.warn('[DeepSeek] 响应为空');
+      return getRandomMove(board);
+    }
+
+    const position = parseAIMove(content, size);
+    
+    if (position) {
+      console.log('[DeepSeek] 成功:', position);
+      return position;
     }
     
-    return null;
+    // 解析失败，使用随机落子
+    console.warn('[DeepSeek] 解析失败，使用随机落子');
+    return getRandomMove(board);
+    
   } catch (error) {
     console.error('[DeepSeek] 请求错误:', error);
-    return null;
+    return getRandomMove(board);
   }
 };
