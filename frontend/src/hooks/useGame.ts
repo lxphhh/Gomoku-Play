@@ -54,7 +54,7 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
   const [winningLine, setWinningLine] = useState<Position[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isAIMoving, setIsAIMoving] = useState(false);
-  const makeMoveRef = useRef<((position: Position) => Promise<boolean>) | null>(null);
+  const aiMovePending = useRef<boolean>(false);
 
   // 检查游戏是否结束
   const checkGameEnd = useCallback(
@@ -74,51 +74,7 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
     [config.winCondition]
   );
 
-  // 调用 AI 获取落子建议
-  const callAI = useCallback(
-    async (board: BoardData, currentPlayer: 'black' | 'white'): Promise<Position | null> => {
-      try {
-        setIsAIMoving(true);
-        const position = await getAIMove(board, currentPlayer, config.boardSize);
-        return position;
-      } catch (err) {
-        console.error('AI 调用失败:', err);
-        return null;
-      } finally {
-        setIsAIMoving(false);
-      }
-    },
-    [config.boardSize]
-  );
-
-  // 自动 AI 落子
-  useEffect(() => {
-    if (
-      config.mode === 'pva' &&
-      gameState.status === 'playing' &&
-      gameState.currentPlayer === 'white' &&
-      !isAIMoving
-    ) {
-      // AI 落子
-      const timer = setTimeout(async () => {
-        const aiPosition = await callAI(gameState.board, gameState.currentPlayer);
-        if (aiPosition && makeMoveRef.current) {
-          await makeMoveRef.current(aiPosition);
-        }
-      }, 500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [
-    gameState.status,
-    gameState.currentPlayer,
-    gameState.board,
-    config.mode,
-    isAIMoving,
-    callAI,
-  ]);
-
-  // 落子
+  // 落子函数
   const makeMoveFn = useCallback(
     async (position: Position): Promise<boolean> => {
       // 验证游戏状态
@@ -189,10 +145,50 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
     [gameState, config, checkGameEnd, isAIMoving]
   );
 
-  // 设置 ref 以便在 useEffect 中调用
+  // AI 落子
+  const handleAIMove = useCallback(async () => {
+    if (
+      config.mode !== 'pva' ||
+      gameState.status !== 'playing' ||
+      gameState.currentPlayer !== 'white' ||
+      isAIMoving ||
+      aiMovePending.current
+    ) {
+      return;
+    }
+
+    aiMovePending.current = true;
+    setIsAIMoving(true);
+
+    try {
+      console.log('[AI] 开始思考...');
+      const aiPosition = await getAIMove(gameState.board, 'white', config.boardSize);
+      
+      if (aiPosition) {
+        console.log('[AI] 决定落子:', aiPosition);
+        await makeMoveFn(aiPosition);
+      } else {
+        console.error('[AI] 无法获取落子位置');
+        setError('AI 无法决策，请重试');
+      }
+    } catch (err) {
+      console.error('[AI] 落子失败:', err);
+      setError('AI 落子失败');
+    } finally {
+      setIsAIMoving(false);
+      aiMovePending.current = false;
+    }
+  }, [config.mode, gameState, isAIMoving, makeMoveFn, config.boardSize]);
+
+  // 自动 AI 落子
   useEffect(() => {
-    makeMoveRef.current = makeMoveFn;
-  }, [makeMoveFn]);
+    // 延迟 300ms 等待玩家落子完成
+    const timer = setTimeout(() => {
+      handleAIMove();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [gameState.currentPlayer, gameState.status, handleAIMove]);
 
   // 悔棋
   const undoMove = useCallback((): boolean => {
@@ -248,6 +244,7 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
     setWinningLine([]);
     setError(null);
     setIsAIMoving(false);
+    aiMovePending.current = false;
   }, [config.boardSize, config.mode]);
 
   // 设置游戏模式
