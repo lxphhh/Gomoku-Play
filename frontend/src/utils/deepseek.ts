@@ -18,65 +18,82 @@ export interface DifficultyConfig {
   systemPrompt: string;
 }
 
-// 简化的系统提示词
+// 五子棋核心规则
+const RULES = `
+【五子棋规则】
+- 黑棋先行，白棋后行
+- 只能在空白交叉点落子（不能下在已有棋子的位置！）
+- 横/竖/斜任意方向连成5子即获胜
+- 必须返回正确的 JSON 格式
+`;
+
+// 专业棋型术语
+const PATTERNS = `
+【棋型定义】
+活四：AA.AA（中间任意空）= 下一手必胜
+冲四：AAAA. 或 .AAAA = 冲四叫杀
+活三：AA.AA（两个空位都不在端点）= 强活三
+眠三：A.AA. 或 AA.A. 或 A.A.A = 眠三
+跳三：A.AAA 或 AAA.A = 跳三威胁
+`;
+
+// 策略指南
+const STRATEGY = `
+【攻守策略】
+
+【进攻优先级】（从高到低）
+1. 连五 = 直接获胜
+2. 活四 = 下一手必胜
+3. 冲四 = 制造冲四叫杀
+4. 活三 = 扩张优势
+
+【防守优先级】（从高到低）
+1. 对方活四 = 必须挡住！
+2. 对方冲四 = 优先挡住
+3. 对方活三 = 考虑反三或挡
+
+【位置价值评估】
+- 中心位 (7,7) 附近 > 边角位
+- 能连接自己棋子 > 独立位置
+- 能同时攻和守 > 单向价值
+`;
+
+// 不同难度的专业提示词
 const SYSTEM_PROMPTS: Record<DifficultyLevel, string> = {
-  easy: `你是五子棋新手。
+  easy: `${RULES}${PATTERNS}
 
-规则：
-- 黑先白后
-- 只能下在空白位置
-- 连成5子获胜
+【你是新手】只会看眼前1步，经常犯错，防守意识弱。`,
 
-请简单分析棋盘，给出落子位置。`,
-  
-  medium: `你是五子棋中等水平玩家。
+  medium: `${RULES}${PATTERNS}${STRATEGY}
 
-规则：
-- 黑先白后
-- 只能下在空白位置
-- 连成5子获胜
+【你是中等水平】能识别基本棋型，攻防平衡，能看2-3步。`,
 
-分析：
-- 看看双方有没有连成4子的
-- 有没有可以形成连4的机会
-- 给出最佳位置。`,
-  
-  hard: `你是五子棋高手。
+  hard: `${RULES}${PATTERNS}${STRATEGY}
 
-规则：
-- 黑先白后
-- 只能下在空白位置
-- 连成5子获胜
+【你是高手】准确定位所有棋型，深度计算4-5步，攻防精准。`,
 
-分析步骤：
-1. 检查自己是否能连5（最高优先级）
-2. 检查对手是否能连5（必须挡住）
-3. 检查是否能连4或活3
-4. 给出最佳落子位置。`,
-  
-  master: `你是五子棋职业选手。
+  master: `${RULES}${PATTERNS}${STRATEGY}
 
-规则：
-- 黑先白后
-- 只能下在空白位置
-- 连成5子获胜
-
-严格分析：
-1. 连5 → 直接获胜
-2. 对手活4 → 必须挡住
-3. 对手冲4 → 优先挡住
-4. 自己活4/冲4
-5. 对手活3 → 反三或挡
-6. 自己活3/跳3
-7. 位置价值（中心、连接）
-`
+【你是职业大师】精通所有战术，深度计算6+步，善用定式和陷阱，完美攻防节奏。`
 };
 
 export const DIFFICULTY_CONFIGS: Record<DifficultyLevel, DifficultyConfig> = {
-  easy: { level: 'easy', name: '入门', description: '初学者水平', maxTokens: 80, temperature: 0.9, systemPrompt: SYSTEM_PROMPTS.easy },
-  medium: { level: 'medium', name: '进阶', description: '中等水平', maxTokens: 120, temperature: 0.6, systemPrompt: SYSTEM_PROMPTS.medium },
-  hard: { level: 'hard', name: '困难', description: '高水平', maxTokens: 180, temperature: 0.3, systemPrompt: SYSTEM_PROMPTS.hard },
-  master: { level: 'master', name: '大师', description: '职业级', maxTokens: 250, temperature: 0.1, systemPrompt: SYSTEM_PROMPTS.master }
+  easy: { 
+    level: 'easy', name: '入门', description: '初学者', 
+    maxTokens: 80, temperature: 0.9, systemPrompt: SYSTEM_PROMPTS.easy 
+  },
+  medium: { 
+    level: 'medium', name: '进阶', description: '中等', 
+    maxTokens: 120, temperature: 0.6, systemPrompt: SYSTEM_PROMPTS.medium 
+  },
+  hard: { 
+    level: 'hard', name: '困难', description: '高手', 
+    maxTokens: 180, temperature: 0.3, systemPrompt: SYSTEM_PROMPTS.hard 
+  },
+  master: { 
+    level: 'master', name: '大师', description: '职业', 
+    maxTokens: 250, temperature: 0.1, systemPrompt: SYSTEM_PROMPTS.master 
+  }
 };
 
 let currentDifficulty: DifficultyLevel = 'medium';
@@ -115,32 +132,22 @@ const boardToString = (board: BoardData): string => {
   return result;
 };
 
-interface AIResponse {
-  row?: number;
-  col?: number;
-  position?: { row: number; col: number };
-  move?: { row: number; col: number };
-}
-
 const parseAIResponse = (content: string, board: BoardData): Position | null => {
   try {
     console.log('[AI] 原始响应:', content);
     
-    // 多种 JSON 格式尝试
-    const patterns: RegExp[] = [
-      // {"row": 7, "col": 8}
-      /\{"row":\s*(\d+),\s*"col":\s*(\d+)\}/,
-      // [7, 8] 数组格式
+    // 尝试多种 JSON 格式
+    const formats = [
+      /\{"row"\s*:\s*(\d+)\s*,\s*"col"\s*:\s*(\d+)\}/,
+      /\{"col"\s*:\s*(\d+)\s*,\s*"row"\s*:\s*(\d+)\}/,
       /\[\s*(\d+)\s*,\s*(\d+)\s*\]/,
+      /"position"\s*:\s*\{\s*"row"\s*:\s*(\d+)\s*,\s*"col"\s*:\s*(\d+)\s*\}/,
     ];
 
-    for (const pattern of patterns) {
-      const match = content.match(pattern);
+    for (const fmt of formats) {
+      const match = content.match(fmt);
       if (match) {
-        const row = parseInt(match[1], 10);
-        const col = parseInt(match[2], 10);
-        const pos = { row, col };
-        
+        const pos = { row: parseInt(match[1], 10), col: parseInt(match[2], 10) };
         if (isValid(board, pos)) {
           console.log('[AI] 解析成功:', pos);
           return pos;
@@ -148,27 +155,30 @@ const parseAIResponse = (content: string, board: BoardData): Position | null => 
       }
     }
 
-    // 尝试提取任意 JSON
+    // 提取任意 JSON
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as AIResponse;
+      const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
       let pos: Position | undefined;
       
-      if (parsed.row !== undefined && parsed.col !== undefined) pos = { row: parsed.row, col: parsed.col };
-      else if (parsed.position) pos = parsed.position;
-      else if (parsed.move) pos = parsed.move;
+      if (typeof parsed.row === 'number' && typeof parsed.col === 'number') {
+        pos = { row: parsed.row, col: parsed.col };
+      } else if (parsed.position && typeof parsed.position === 'object') {
+        const p = parsed.position as Record<string, number>;
+        if (typeof p.row === 'number' && typeof p.col === 'number') pos = { row: p.row, col: p.col };
+      }
       
       if (pos && isValid(board, pos)) {
-        console.log('[AI] JSON解析成功:', pos);
+        console.log('[AI] JSON解析:', pos);
         return pos;
       }
     }
     
-    console.warn('[AI] 无法解析响应，使用随机落子');
+    console.warn('[AI] 解析失败，随机落子');
     return randomMove(board);
     
   } catch (error) {
-    console.warn('[AI] 解析异常:', error);
+    console.warn('[AI] 异常:', error);
     return randomMove(board);
   }
 };
@@ -183,19 +193,21 @@ export const getAIMove = async (
   const boardStr = boardToString(board);
   const playerEmoji = currentPlayer === 'black' ? '●' : '○';
 
-  // 简化用户提示
   const userPrompt = `当前棋盘：
 ${boardStr}
 
-轮到你下（${playerEmoji}），请选择最佳位置。
+轮到${playerEmoji}落子。
 
-直接返回 JSON，格式：
-{"row": 数字, "col": 数字}
+请分析：
+1. 双方各有什么棋型？
+2. 有无连五/活四/冲四？
+3. 最佳落子位置？
 
-必须是空白位置（·）！`;
+直接返回 JSON（只返回JSON，不要解释）：
+{"row": 0-14的数字, "col": 0-14的数字, "reasoning": "一句话分析"}`;
 
   try {
-    console.log(`[AI] ${difficulty.name} 难度思考中...`);
+    console.log(`[AI] ${difficulty.name} 思考中...`);
     
     const response = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
@@ -217,7 +229,7 @@ ${boardStr}
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[AI] API 错误:', response.status, errorText);
+      console.error('[AI] API错误:', response.status, errorText);
       return randomMove(board);
     }
 
