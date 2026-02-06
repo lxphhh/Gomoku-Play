@@ -1,4 +1,6 @@
 import { GameMode } from '../types';
+import { DifficultyConfig, getDifficultyOptions, setDifficulty, getCurrentDifficulty } from '../utils/deepseek';
+import { useState, useEffect } from 'react';
 
 interface ControlsProps {
   onUndo: () => void;
@@ -15,8 +17,76 @@ export default function Controls({
   currentMode,
   canUndo 
 }: ControlsProps) {
+  const [difficulty, setDifficultyState] = useState<DifficultyConfig>(getCurrentDifficulty());
+  const [showDifficultySelector, setShowDifficultySelector] = useState(false);
+  const difficulties = getDifficultyOptions();
+
+  useEffect(() => {
+    setDifficultyState(getCurrentDifficulty());
+  }, []);
+
+  const handleDifficultyChange = (diff: DifficultyConfig) => {
+    setDifficulty(diff.level);
+    setDifficultyState(diff);
+    setShowDifficultySelector(false);
+  };
+
+  const getDifficultyColor = (level: string) => {
+    switch (level) {
+      case 'easy': return 'bg-green-500';
+      case 'medium': return 'bg-yellow-500';
+      case 'hard': return 'bg-orange-500';
+      case 'master': return 'bg-red-500';
+      default: return 'bg-blue-500';
+    }
+  };
+
   return (
-    <div className="flex flex-wrap justify-center gap-4 mt-6">
+    <div className="flex flex-col items-center gap-4 mt-6">
+      {/* 难度显示 */}
+      {currentMode === 'pva' && (
+        <div className="relative">
+          <button
+            onClick={() => setShowDifficultySelector(!showDifficultySelector)}
+            className={`
+              px-4 py-2 rounded-lg font-medium text-white shadow-md
+              ${getDifficultyColor(difficulty.level)}
+            `}
+          >
+            🎯 难度: {difficulty.name} ▼
+          </button>
+
+          {/* 难度选择下拉框 */}
+          {showDifficultySelector && (
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 
+                          bg-white rounded-lg shadow-xl p-2 z-50 min-w-[200px]
+                          border border-gray-200">
+              <div className="text-xs text-gray-500 px-3 py-1 border-b">
+                选择 AI 难度等级
+              </div>
+              {difficulties.map((diff) => (
+                <button
+                  key={diff.level}
+                  onClick={() => handleDifficultyChange(diff)}
+                  className={`
+                    w-full text-left px-4 py-3 rounded-lg transition-all
+                    ${difficulty.level === diff.level 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'hover:bg-gray-100'}
+                  `}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`w-3 h-3 rounded-full ${getDifficultyColor(diff.level)}`}></span>
+                    <span className="font-medium">{diff.name}</span>
+                  </div>
+                  <div className="text-xs text-gray-500 ml-5">{diff.description}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 模式切换 */}
       <div className="flex bg-gray-200 rounded-lg p-1">
         <button
@@ -44,25 +114,27 @@ export default function Controls({
       </div>
 
       {/* 操作按钮 */}
-      <button
-        onClick={onUndo}
-        disabled={!canUndo}
-        className={`
-          px-6 py-2 rounded-lg font-medium transition-all
-          ${canUndo 
-            ? 'bg-yellow-500 text-white hover:bg-yellow-600 shadow-md' 
-            : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
-        `}
-      >
-        ↩️ 悔棋
-      </button>
+      <div className="flex flex-wrap justify-center gap-4">
+        <button
+          onClick={onUndo}
+          disabled={!canUndo}
+          className={`
+            px-6 py-2 rounded-lg font-medium transition-all
+            ${canUndo 
+              ? 'bg-yellow-500 text-white hover:bg-yellow-600 shadow-md' 
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
+          `}
+        >
+          ↩️ 悔棋
+        </button>
 
-      <button
-        onClick={onRestart}
-        className="px-6 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-all shadow-md"
-      >
-        🔄 重新开始
-      </button>
+        <button
+          onClick={onRestart}
+          className="px-6 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-all shadow-md"
+        >
+          🔄 重新开始
+        </button>
+      </div>
     </div>
   );
 }
