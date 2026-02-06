@@ -6,7 +6,8 @@ import {
   Position, 
   Player, 
   GameMode,
-  BoardData,
+  GameStatus,
+  Move,
 } from '../types';
 import { 
   createEmptyBoard,
@@ -36,8 +37,26 @@ export default function Game({ mode, onModeChange }: GameProps) {
   const [winningLine, setWinningLine] = useState<Position[]>([]);
   const isAiThinking = useRef(false);
 
+  // 检查游戏是否结束
+  const checkGameEnd = useCallback(
+    (board: typeof gameState.board, lastMove: Position, player: Player): { status: GameStatus; winningLine: Position[] } => {
+      const { win, winningLine: line } = checkWin(board, lastMove, player, 5);
+      
+      if (win) {
+        return { status: `${player}_win` as GameStatus, winningLine: line };
+      }
+      
+      if (checkDraw(board)) {
+        return { status: 'draw' as GameStatus, winningLine: [] };
+      }
+      
+      return { status: 'playing' as GameStatus, winningLine: [] };
+    },
+    []
+  );
+
   // AI 落子 (简单随机)
-  const makeAIMove = useCallback((board: BoardData): Position | null => {
+  const makeAIMove = useCallback((board: typeof gameState.board): Position | null => {
     const emptyCells: Position[] = [];
     board.forEach((row, r) => {
       row.forEach((cell, c) => {
@@ -66,17 +85,23 @@ export default function Game({ mode, onModeChange }: GameProps) {
 
     newBoard[position.row][position.col] = gameState.currentPlayer;
 
-    let newStatus: typeof gameState.status = 'playing';
-    let newWinner: Player | null = null;
+    const { status: newStatus, winningLine: newWinningLine } = checkGameEnd(
+      newBoard, 
+      position, 
+      gameState.currentPlayer
+    );
 
-    if (win) {
-      newStatus = `${gameState.currentPlayer}_win`;
-      newWinner = gameState.currentPlayer;
-      setWinningLine(line);
-    } else if (draw) {
-      newStatus = 'draw';
-    }
+    const isGameOver = newStatus !== 'playing';
+    const newWinner = newStatus.includes('_win') ? gameState.currentPlayer : null;
 
+    const newMove: Move = {
+      position,
+      player: gameState.currentPlayer,
+      timestamp: Date.now(),
+    };
+    const newMoves = [...gameState.moves, newMove];
+
+    setWinningLine(newWinningLine);
     setGameState(prev => ({
       ...prev,
       board: newBoard,
@@ -88,7 +113,7 @@ export default function Game({ mode, onModeChange }: GameProps) {
     }));
 
     // AI 回合
-    if (mode === 'pva' && !win && !draw && gameState.currentPlayer === 'black') {
+    if (mode === 'pva' && !isGameOver && gameState.currentPlayer === 'black') {
       isAiThinking.current = true;
       setTimeout(() => {
         const aiMove = makeAIMove(newBoard);
@@ -98,7 +123,7 @@ export default function Game({ mode, onModeChange }: GameProps) {
         isAiThinking.current = false;
       }, 500);
     }
-  }, [gameState, mode, makeAIMove]);
+  }, [gameState, mode, makeAIMove, checkGameEnd]);
 
   // 悔棋
   const handleUndo = useCallback(() => {
