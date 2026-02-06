@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   GameState,
   GameConfig,
@@ -20,13 +20,14 @@ import {
 interface UseGameReturn {
   gameState: GameState;
   config: GameConfig;
-  makeMove: (position: Position) => boolean;
+  makeMove: (position: Position) => Promise<boolean>;
   undoMove: () => boolean;
   restartGame: () => void;
   setGameMode: (mode: 'pvp' | 'pva') => void;
   winningLine: Position[];
   error: string | null;
   clearError: () => void;
+  isAIMoving: boolean;
 }
 
 export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
@@ -52,6 +53,7 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
 
   const [winningLine, setWinningLine] = useState<Position[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isAIMoving, setIsAIMoving] = useState(false);
 
   // 检查游戏是否结束
   const checkGameEnd = useCallback(
@@ -77,12 +79,80 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
     [config.winCondition]
   );
 
+  // 调用 AI API 获取落子建议
+  const callAI = useCallback(
+    async (board: BoardData, currentPlayer: 'black' | 'white'): Promise<Position | null> => {
+      try {
+        setIsAIMoving(true);
+        const response = await fetch('/api/ai-move', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            board,
+            currentPlayer,
+            boardSize: config.boardSize,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`AI API 错误: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (data.success && data.position) {
+          return data.position;
+        }
+        return null;
+      } catch (err) {
+        console.error('AI 调用失败:', err);
+        return null;
+      } finally {
+        setIsAIMoving(false);
+      }
+    },
+    [config.boardSize]
+  );
+
+  // 自动 AI 落子
+  useEffect(() => {
+    if (
+      config.mode === 'pva' &&
+      gameState.status === 'playing' &&
+      gameState.currentPlayer === 'white' &&
+      !isAIMoving
+    ) {
+      // AI 落子
+      const timer = setTimeout(async () => {
+        const aiPosition = await callAI(gameState.board, gameState.currentPlayer);
+        if (aiPosition) {
+          makeMove(aiPosition);
+        }
+      }, 500); // 延迟 500ms 让用户体验更好
+
+      return () => clearTimeout(timer);
+    }
+  }, [
+    gameState.status,
+    gameState.currentPlayer,
+    gameState.board,
+    config.mode,
+    isAIMoving,
+    callAI
+  ]);
+
   // 落子
   const makeMove = useCallback(
-    (position: Position): boolean => {
+    async (position: Position): Promise<boolean> => {
       // 验证游戏状态
       if (gameState.status !== 'playing') {
         setError('游戏已结束，无法继续落子');
+        return false;
+      }
+
+      // 如果是 AI 正在思考中，跳过
+      if (isAIMoving && gameState.currentPlayer === 'white') {
         return false;
       }
 
@@ -134,7 +204,7 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
 
       return true;
     },
-    [gameState, config, checkGameEnd]
+    [gameState, config, checkGameEnd, isAIMoving]
   );
 
   // 悔棋
@@ -185,6 +255,7 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
     });
     setWinningLine([]);
     setError(null);
+    setIsAIMoving(false);
   }, [config.boardSize, config.mode]);
 
   // 设置游戏模式
@@ -212,5 +283,6 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
     winningLine,
     error,
     clearError,
+    isAIMoving,
   };
 };
