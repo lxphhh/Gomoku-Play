@@ -1,10 +1,9 @@
 import { Position, BoardData } from '../types';
 
 // DeepSeek API 配置
-// Vercel 环境变量必须以 VITE_ 开头
 const DEEPSEEK_API_URL = import.meta.env.VITE_DEEPSEEK_API_URL || 'https://api.deepseek.com/v1';
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || '';
-const DEEPSEEK_MODEL = import.meta.env.VITE_DEEPSEEK_MODEL || 'deepseek-chat';
+const DEEPSEEK_MODEL = (import.meta.env.VITE_DEEPSEEK_MODEL || 'deepseek-chat').trim();
 const DEEPSEEK_TIMEOUT = parseInt(import.meta.env.VITE_DEEPSEEK_TIMEOUT || '30000', 10);
 
 // 备用：随机落子
@@ -112,7 +111,7 @@ export const getAIMove = async (
   try {
     const prompt = buildPrompt(board, currentPlayer);
     
-    console.log('[DeepSeek] 发送请求...');
+    console.log('[DeepSeek] 发送请求, model:', DEEPSEEK_MODEL);
     
     const response = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
@@ -121,7 +120,7 @@ export const getAIMove = async (
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
+        model: DEEPSEEK_MODEL,  // 确保没有空格
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 100,
         temperature: 0.3,
