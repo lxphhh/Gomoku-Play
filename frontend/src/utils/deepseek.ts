@@ -18,30 +18,38 @@ export interface DifficultyConfig {
   systemPrompt: string;
 }
 
-export const DIFFICULTY_CONFIGS: Record<DifficultyLevel, DifficultyConfig> = {
-  easy: {
-    level: 'easy',
-    name: '入门',
-    description: '适合初学者，AI 会犯错',
-    maxTokens: 100,
-    temperature: 0.8,
-    systemPrompt: `你是一个五子棋初学者水平 AI。
+// 五子棋规则提示词（所有难度通用）
+const RULES_PROMPT = `
+## 五子棋规则
+1. 黑棋先手，白棋后手
+2. 双方轮流落子
+3. **重要：不能下在已有棋子的位置！必须选择空白位置！**
+4. 横、竖、斜任意方向连成5子获胜
+5. 连成5子即获胜，不需要6子
+
+## 重要注意事项
+- row 和 col 的取值范围是 0-14
+- **必须选择棋盘上为 "·" 的空白位置**
+- **绝对不能选择已有 "●" 或 "○" 的位置！**
+`;
+
+// 不同难度的系统提示词
+const SYSTEM_PROMPTS: Record<DifficultyLevel, string> = {
+  easy: `你是一个五子棋初学者水平 AI。
 
 你的特点：
-1. 偶尔会犯明显的错误
-2. 不会主动做复杂的防守
-3. 只会攻击眼前的连子
-4. 思考时间短，反应快
+1. 刚开始学习五子棋
+2. 只会攻击眼前的连子
+3. 防守意识较弱
+4. 偶尔会犯明显错误
 
-请根据当前棋盘给出落子建议。`
-  },
-  medium: {
-    level: 'medium',
-    name: '进阶',
-    description: '标准对战，会防守和进攻',
-    maxTokens: 150,
-    temperature: 0.5,
-    systemPrompt: `你是一个五子棋进阶水平 AI。
+请严格遵守以下规则：
+- 只能选择空白位置（棋盘上显示为 "·" 的位置）
+- 不能下在已有棋子的位置！
+
+${RULES_PROMPT}`,
+  
+  medium: `你是一个五子棋进阶水平 AI。
 
 你的特点：
 1. 会识别威胁并防守
@@ -49,15 +57,13 @@ export const DIFFICULTY_CONFIGS: Record<DifficultyLevel, DifficultyConfig> = {
 3. 会考虑 2-3 步后的局势
 4. 攻防平衡
 
-请分析棋盘并给出最佳落子位置。`
-  },
-  hard: {
-    level: 'hard',
-    name: '困难',
-    description: '高水平，需要认真对待',
-    maxTokens: 200,
-    temperature: 0.3,
-    systemPrompt: `你是一个五子棋高水平 AI。
+请严格遵守以下规则：
+- 只能选择空白位置（棋盘上显示为 "·" 的位置）
+- 不能下在已有棋子的位置！
+
+${RULES_PROMPT}`,
+  
+  hard: `你是一个五子棋高水平 AI。
 
 你的特点：
 1. 能准确识别所有威胁（活四、冲四、活三等）
@@ -65,7 +71,51 @@ export const DIFFICULTY_CONFIGS: Record<DifficultyLevel, DifficultyConfig> = {
 3. 攻防转换时机把握精准
 4. 善于制造陷阱
 
-请给出最优落子位置，并简要说明理由。`
+请严格遵守以下规则：
+- 只能选择空白位置（棋盘上显示为 "·" 的位置）
+- 不能下在已有棋子的位置！
+
+${RULES_PROMPT}`,
+  
+  master: `你是一个五子棋职业大师级 AI。
+
+你的特点：
+1. 能看穿所有棋型（眠三、跳三、活四、冲四、连五等）
+2. 深度计算（6+ 步）
+3. 完美的攻防节奏控制
+4. 善于开局定式和飞手设计
+
+请严格遵守以下规则：
+- 只能选择空白位置（棋盘上显示为 "·" 的位置）
+- 不能下在已有棋子的位置！
+
+${RULES_PROMPT}`
+};
+
+export const DIFFICULTY_CONFIGS: Record<DifficultyLevel, DifficultyConfig> = {
+  easy: {
+    level: 'easy',
+    name: '入门',
+    description: '适合初学者，AI 会犯错',
+    maxTokens: 100,
+    temperature: 0.8,
+    systemPrompt: SYSTEM_PROMPTS.easy
+  },
+  medium: {
+    level: 'medium',
+    name: '进阶',
+    description: '标准对战，会防守和进攻',
+    maxTokens: 150,
+    temperature: 0.5,
+    systemPrompt: SYSTEM_PROMPTS.medium
+  },
+  hard: {
+    level: 'hard',
+    name: '困难',
+    description: '高水平，需要认真对待',
+    maxTokens: 200,
+    temperature: 0.3,
+    systemPrompt: SYSTEM_PROMPTS.hard
   },
   master: {
     level: 'master',
@@ -73,20 +123,7 @@ export const DIFFICULTY_CONFIGS: Record<DifficultyLevel, DifficultyConfig> = {
     description: '职业级水平，极难战胜',
     maxTokens: 300,
     temperature: 0.1,
-    systemPrompt: `你是一个五子棋职业大师级 AI。
-
-你的特点：
-1. 能看穿所有棋型（眠三、跳三、活四、冲四、连五等）
-2. 深度计算（6+ 步）
-3. 完美的攻防节奏控制
-4. 善于开局定式和飞手设计
-5. 每一步都追求最优解
-
-请给出最优落子位置，分析：
-- 当前棋型分析
-- 攻守判断
-- 最佳应对
-- 后续变化`
+    systemPrompt: SYSTEM_PROMPTS.master
   }
 };
 
@@ -111,22 +148,44 @@ export const getDifficultyOptions = (): DifficultyConfig[] => {
   return Object.values(DIFFICULTY_CONFIGS);
 };
 
-// 备用：随机落子
-const getRandomMove = (board: BoardData): Position | null => {
+/**
+ * 检查位置是否有效（空白且在棋盘范围内）
+ */
+const isValidPosition = (board: BoardData, pos: Position): boolean => {
   const size = board.length;
-  const emptyCells: Position[] = [];
-  
+  return (
+    pos.row >= 0 &&
+    pos.row < size &&
+    pos.col >= 0 &&
+    pos.col < size &&
+    board[pos.row][pos.col] === null
+  );
+};
+
+/**
+ * 获取所有空白位置
+ */
+const getEmptyPositions = (board: BoardData): Position[] => {
+  const size = board.length;
+  const empty: Position[] = [];
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
       if (board[r][c] === null) {
-        emptyCells.push({ row: r, col: c });
+        empty.push({ row: r, col: c });
       }
     }
   }
-  
-  if (emptyCells.length === 0) return null;
-  const randomIndex = Math.floor(Math.random() * emptyCells.length);
-  return emptyCells[randomIndex];
+  return empty;
+};
+
+/**
+ * 备用：随机落子（选择空白位置）
+ */
+const getRandomMove = (board: BoardData): Position | null => {
+  const emptyPositions = getEmptyPositions(board);
+  if (emptyPositions.length === 0) return null;
+  const randomIndex = Math.floor(Math.random() * emptyPositions.length);
+  return emptyPositions[randomIndex];
 };
 
 /**
@@ -156,47 +215,83 @@ const boardToString = (board: BoardData): string => {
 };
 
 /**
- * 构建提示词
+ * 构建用户提示词
  */
-const buildPrompt = (board: BoardData, currentPlayer: 'black' | 'white', difficulty: DifficultyConfig): string => {
+const buildPrompt = (board: BoardData, currentPlayer: 'black' | 'white'): string => {
   const boardStr = boardToString(board);
   const playerEmoji = currentPlayer === 'black' ? '●' : '○';
+  const emptyCount = getEmptyPositions(board).length;
   
-  return `${difficulty.systemPrompt}
+  return `
+## 当前局面
+当前执子方：${playerEmoji} (${currentPlayer})
+剩余空白位置：${emptyCount} 个
 
-当前棋盘状态（●黑 ○白，坐标从0开始）：
+当前棋盘（●黑 ○白，坐标从0开始）：
 ${boardStr}
 
-当前执子方：${playerEmoji} (${currentPlayer})
+## 任务
+请分析当前局势，选择最佳落子位置。
 
-请直接返回 JSON 格式：
-{"row": 数字, "col": 数字, "reasoning": "你的简要分析"}
+## 要求
+1. **必须选择空白位置（"·"）**
+2. **绝对不能选择已有 "●" 或 "○" 的位置！**
+3. 返回格式严格的 JSON
 
-注意：row 和 col 必须在 0-14 范围内。
+请直接返回 JSON（不要加任何解释）：
+{"row": 数字, "col": 数字, "reasoning": "你的分析"}
 `;
 };
 
 /**
  * 解析 AI 返回的位置
  */
-const parseResponse = (content: string, size: number): Position | null => {
+const parseAndValidateResponse = (
+  content: string,
+  board: BoardData,
+  size: number
+): Position | null => {
   try {
+    // 提取 JSON
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
+    if (!jsonMatch) {
+      console.error('[AI] 无法提取 JSON');
+      return null;
+    }
     
     const parsed = JSON.parse(jsonMatch[0]);
     
-    if (typeof parsed.row === 'number' && typeof parsed.col === 'number') {
-      const row = Math.max(0, Math.min(size - 1, Math.floor(parsed.row)));
-      const col = Math.max(0, Math.min(size - 1, Math.floor(parsed.col)));
-      
-      if (row >= 0 && row < size && col >= 0 && col < size) {
-        return { row, col };
-      }
+    // 解析坐标
+    if (typeof parsed.row !== 'number' || typeof parsed.col !== 'number') {
+      console.error('[AI] 坐标格式错误:', parsed);
+      return null;
     }
-    return null;
-  } catch {
-    return null;
+    
+    const row = Math.max(0, Math.min(size - 1, Math.floor(parsed.row)));
+    const col = Math.max(0, Math.min(size - 1, Math.floor(parsed.col)));
+    
+    const position: Position = { row, col };
+    
+    // 验证位置是否有效（必须在范围内且是空白位置）
+    if (!isValidPosition(board, position)) {
+      console.error('[AI] 选择的不是空白位置:', position, '棋盘该位置:', board[row][col]);
+      
+      // 如果无效，自动选择第一个空白位置
+      const emptyPositions = getEmptyPositions(board);
+      if (emptyPositions.length > 0) {
+        const fallback = emptyPositions[0];
+        console.log('[AI] 自动选择空白位置:', fallback);
+        return fallback;
+      }
+      return null;
+    }
+    
+    console.log('[AI] 验证通过:', position);
+    return position;
+    
+  } catch (error) {
+    console.error('[AI] JSON 解析错误:', error);
+    return getRandomMove(board);
   }
 };
 
@@ -208,6 +303,7 @@ export const getAIMove = async (
   currentPlayer: 'black' | 'white',
   size: number = 15
 ): Promise<Position | null> => {
+  // 1. 检查 API Key
   if (!DEEPSEEK_API_KEY) {
     console.warn('[AI] API Key 未配置，使用随机落子');
     return getRandomMove(board);
@@ -216,9 +312,9 @@ export const getAIMove = async (
   const difficulty = getCurrentDifficulty();
   
   try {
-    const prompt = buildPrompt(board, currentPlayer, difficulty);
+    const prompt = buildPrompt(board, currentPlayer);
     
-    console.log(`[AI] ${difficulty.name} 难度思考中...`);
+    console.log(`[AI] ${difficulty.name} 难度，思考中... (剩余空白: ${getEmptyPositions(board).length})`);
     
     const response = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
@@ -238,28 +334,34 @@ export const getAIMove = async (
       signal: AbortSignal.timeout(DEEPSEEK_TIMEOUT),
     });
 
+    // 2. 处理错误响应
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[AI] API 错误:', response.status, errorText);
       return getRandomMove(board);
     }
 
+    // 3. 解析成功响应
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || '';
     
-    console.log(`[AI] ${difficulty.name} 响应:`, content);
-    
     if (!content) {
+      console.warn('[AI] 响应为空，使用随机落子');
       return getRandomMove(board);
     }
 
-    const position = parseResponse(content, size);
+    console.log(`[AI] ${difficulty.name} 原始响应:`, content);
+    
+    // 4. 解析并验证位置
+    const position = parseAndValidateResponse(content, board, size);
     
     if (position) {
-      console.log(`[AI] ${difficulty.name} 建议:`, position);
+      console.log(`[AI] ${difficulty.name} 最终选择:`, position);
       return position;
     }
     
+    // 5. 备用：随机选择空白位置
+    console.warn('[AI] 使用备用随机落子');
     return getRandomMove(board);
     
   } catch (error) {
