@@ -1,68 +1,14 @@
 import { Position, BoardData } from '../types';
 
-// DeepSeek API 配置 (从环境变量读取)
-const DEEPSEEK_API_URL = import.meta.env.VITE_DEEPSEEK_API_URL || 'https://api.deepseek.com';
+// DeepSeek API 配置
+// Vercel 环境变量必须以 VITE_ 开头
+const DEEPSEEK_API_URL = import.meta.env.VITE_DEEPSEEK_API_URL || 'https://api.deepseek.com/v1';
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || '';
 const DEEPSEEK_MODEL = import.meta.env.VITE_DEEPSEEK_MODEL || 'deepseek-chat';
 const DEEPSEEK_TIMEOUT = parseInt(import.meta.env.VITE_DEEPSEEK_TIMEOUT || '30000', 10);
 
-/**
- * 将棋盘转换为字符串表示
- */
-export const boardToString = (board: BoardData): string => {
-  const size = board.length;
-  let result = '   ';
-  
-  for (let c = 0; c < size; c++) {
-    result += ` ${c + 1} `;
-  }
-  result += '\n';
-  
-  for (let r = 0; r < size; r++) {
-    result += ` ${(r + 1).toString().padStart(2)} `;
-    for (let c = 0; c < size; c++) {
-      const cell = board[r][c];
-      if (cell === null) {
-        result += ' · ';
-      } else if (cell === 'black') {
-        result += ' ● ';
-      } else if (cell === 'white') {
-        result += ' ○ ';
-      }
-    }
-    result += '\n';
-  }
-  
-  return result;
-};
-
-/**
- * 构建 AI 提示词（简化版）
- */
-export const buildAIPrompt = (
-  board: BoardData,
-  currentPlayer: 'black' | 'white',
-  _size: number = 15
-): string => {
-  const boardStr = boardToString(board);
-  
-  return `
-# 五子棋 AI
-
-当前棋盘（●黑 ○白，坐标从0开始）：
-${boardStr}
-
-当前执子：${currentPlayer}
-
-直接返回 JSON：
-{"row": 数字, "col": 数字}
-`;
-};
-
-/**
- * 备用：随机落子
- */
-export const getRandomMove = (board: BoardData): Position | null => {
+// 备用：随机落子
+const getRandomMove = (board: BoardData): Position | null => {
   const size = board.length;
   const emptyCells: Position[] = [];
   
@@ -75,75 +21,100 @@ export const getRandomMove = (board: BoardData): Position | null => {
   }
   
   if (emptyCells.length === 0) return null;
-  
   const randomIndex = Math.floor(Math.random() * emptyCells.length);
   return emptyCells[randomIndex];
 };
 
 /**
+ * 将棋盘转换为字符串
+ */
+const boardToString = (board: BoardData): string => {
+  const size = board.length;
+  let result = '   ';
+  
+  for (let c = 0; c < size; c++) {
+    result += ` ${c + 1} `;
+  }
+  result += '\n';
+  
+  for (let r = 0; r < size; r++) {
+    result += ` ${(r + 1).toString().padStart(2)} `;
+    for (let c = 0; c < size; c++) {
+      const cell = board[r][c];
+      if (cell === null) result += ' · ';
+      else if (cell === 'black') result += ' ● ';
+      else if (cell === 'white') result += ' ○ ';
+    }
+    result += '\n';
+  }
+  
+  return result;
+};
+
+/**
+ * 构建提示词
+ */
+const buildPrompt = (board: BoardData, currentPlayer: 'black' | 'white'): string => {
+  const boardStr = boardToString(board);
+  
+  return `# 五子棋 AI
+
+当前棋盘（●黑 ○白）：
+${boardStr}
+
+当前执子：${currentPlayer}
+
+请直接返回 JSON，格式：
+{"row": 0-14的数字, "col": 0-14的数字}
+`;
+};
+
+/**
  * 解析 AI 返回的位置
  */
-const parseAIMove = (content: string, size: number): Position | null => {
+const parseResponse = (content: string, size: number): Position | null => {
   try {
-    // 尝试多种格式提取 JSON
-    let jsonStr = content;
+    // 提取 JSON
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
     
-    // 格式1: ```json {...}```
-    const match1 = content.match(/```json\s*([\s\S]*?)\s*```/);
-    if (match1) jsonStr = match1[1];
-    
-    // 格式2: ```{...}```
-    const match2 = content.match(/```\s*([\s\S]*?)\s*```/);
-    if (match2) jsonStr = match2[1];
-    
-    // 格式3: {"row": 数字, "col": 数字}
-    const match3 = content.match(/\{[\s\S]*\}/);
-    if (match3) jsonStr = match3[0];
-    
-    console.log('[DeepSeek] 解析内容:', jsonStr);
-    
-    const parsed = JSON.parse(jsonStr);
+    const parsed = JSON.parse(jsonMatch[0]);
     
     if (typeof parsed.row === 'number' && typeof parsed.col === 'number') {
-      const position: Position = {
-        row: Math.max(0, Math.min(size - 1, Math.floor(parsed.row))),
-        col: Math.max(0, Math.min(size - 1, Math.floor(parsed.col))),
-      };
+      const row = Math.max(0, Math.min(size - 1, Math.floor(parsed.row)));
+      const col = Math.max(0, Math.min(size - 1, Math.floor(parsed.col)));
       
-      // 验证位置
-      if (position.row >= 0 && position.row < size && position.col >= 0 && position.col < size) {
-        return position;
+      if (row >= 0 && row < size && col >= 0 && col < size) {
+        return { row, col };
       }
     }
-    
-    console.error('[DeepSeek] 解析结果无效:', parsed);
     return null;
-  } catch (e) {
-    console.error('[DeepSeek] JSON 解析失败:', e, '内容:', content);
+  } catch {
     return null;
   }
 };
 
 /**
- * 调用 DeepSeek API 获取 AI 落子建议
+ * 调用 DeepSeek API
  */
 export const getAIMove = async (
   board: BoardData,
   currentPlayer: 'black' | 'white',
   size: number = 15
 ): Promise<Position | null> => {
-  // 检查 API Key
+  // 1. 检查 API Key
   if (!DEEPSEEK_API_KEY) {
     console.warn('[DeepSeek] API Key 未配置，使用随机落子');
     return getRandomMove(board);
   }
 
+  // 2. 发送请求
   try {
-    const prompt = buildAIPrompt(board, currentPlayer, size);
+    const prompt = buildPrompt(board, currentPlayer);
     
     console.log('[DeepSeek] 发送请求...');
     
-    const response = await fetch(`${DEEPSEEK_API_URL}/chat/completions`, {
+    const response = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -158,35 +129,34 @@ export const getAIMove = async (
       signal: AbortSignal.timeout(DEEPSEEK_TIMEOUT),
     });
 
+    // 3. 处理错误响应
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[DeepSeek] API 错误:', response.status, errorText);
       return getRandomMove(board);
     }
 
+    // 4. 解析成功响应
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || '';
     
-    console.log('[DeepSeek] 原始响应:', content);
+    console.log('[DeepSeek] 响应:', content);
     
     if (!content) {
-      console.warn('[DeepSeek] 响应为空');
       return getRandomMove(board);
     }
 
-    const position = parseAIMove(content, size);
+    const position = parseResponse(content, size);
     
     if (position) {
       console.log('[DeepSeek] 成功:', position);
       return position;
     }
     
-    // 解析失败，使用随机落子
-    console.warn('[DeepSeek] 解析失败，使用随机落子');
     return getRandomMove(board);
     
   } catch (error) {
-    console.error('[DeepSeek] 请求错误:', error);
+    console.error('[DeepSeek] 请求异常:', error);
     return getRandomMove(board);
   }
 };
