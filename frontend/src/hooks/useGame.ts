@@ -162,7 +162,7 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
 
     try {
       console.log('[AI] 开始思考...');
-      const aiPosition = await getAIMove(gameState.board, 'white', config.boardSize);
+      const aiPosition = await getAIMove(gameState.board, 'white');
       
       if (aiPosition) {
         console.log('[AI] 决定落子:', aiPosition);
