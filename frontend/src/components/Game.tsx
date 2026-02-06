@@ -1,185 +1,51 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
 import Board from './Board';
 import Controls from './Controls';
-import { 
-  GameState, 
-  Position, 
-  Player, 
-  GameMode,
-  GameStatus,
-  Move,
-} from '../types';
-import { 
-  createEmptyBoard,
-  checkWin,
-  checkDraw,
-  getNextPlayer,
-} from '../utils/gameLogic';
+import { GameMode } from '../types';
+import { useGame } from '../hooks/useGame';
 
-interface GameProps {
+interface GameContainerProps {
   mode: GameMode;
   onModeChange: (mode: GameMode) => void;
 }
 
-export default function Game({ mode, onModeChange }: GameProps) {
-  const [gameState, setGameState] = useState<GameState>(() => ({
-    id: Date.now().toString(),
-    board: createEmptyBoard(15),
-    currentPlayer: 'black',
-    status: 'playing',
-    moves: [],
-    winner: null,
-    mode,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  }));
+export default function GameContainer({ mode }: GameContainerProps) {
+  const {
+    gameState,
+    makeMove,
+    undoMove,
+    restartGame,
+    setGameMode,
+    winningLine,
+    error,
+    clearError,
+    isAIMoving,
+  } = useGame({ mode, AIEnabled: true });
 
-  const [winningLine, setWinningLine] = useState<Position[]>([]);
-  const isAiThinking = useRef(false);
-
-  // 检查游戏是否结束
-  const checkGameEnd = useCallback(
-    (board: typeof gameState.board, lastMove: Position, player: Player): { status: GameStatus; winningLine: Position[] } => {
-      const { win, winningLine: line } = checkWin(board, lastMove, player, 5);
-      
-      if (win) {
-        return { status: `${player}_win` as GameStatus, winningLine: line };
-      }
-      
-      if (checkDraw(board)) {
-        return { status: 'draw' as GameStatus, winningLine: [] };
-      }
-      
-      return { status: 'playing' as GameStatus, winningLine: [] };
-    },
-    []
-  );
-
-  // AI 落子 (简单随机)
-  const makeAIMove = useCallback((board: typeof gameState.board): Position | null => {
-    const emptyCells: Position[] = [];
-    board.forEach((row, r) => {
-      row.forEach((cell, c) => {
-        if (!cell) emptyCells.push({ row: r, col: c });
-      });
-    });
-
-    if (emptyCells.length > 0) {
-      const randomIndex = Math.floor(Math.random() * emptyCells.length);
-      return emptyCells[randomIndex];
-    }
-    return null;
-  }, []);
-
-  // 落子处理
-  const handleCellClick = useCallback((position: Position) => {
-    if (gameState.status !== 'playing' || isAiThinking.current) return;
-    if (gameState.board[position.row][position.col] !== null) return;
-
-    const newBoard = createEmptyBoard(15);
-    for (let r = 0; r < 15; r++) {
-      for (let c = 0; c < 15; c++) {
-        newBoard[r][c] = gameState.board[r][c];
-      }
-    }
-
-    newBoard[position.row][position.col] = gameState.currentPlayer;
-
-    const { status: newStatus, winningLine: newWinningLine } = checkGameEnd(
-      newBoard, 
-      position, 
-      gameState.currentPlayer
-    );
-
-    const isGameOver = newStatus !== 'playing';
-    const newWinner = newStatus.includes('_win') ? gameState.currentPlayer : null;
-
-    const newMove: Move = {
-      position,
-      player: gameState.currentPlayer,
-      timestamp: Date.now(),
-    };
-    const newMoves = [...gameState.moves, newMove];
-
-    setWinningLine(newWinningLine);
-    setGameState(prev => ({
-      ...prev,
-      board: newBoard,
-      currentPlayer: getNextPlayer(prev.currentPlayer),
-      status: newStatus,
-      moves: newMoves,
-      winner: newWinner,
-      updatedAt: Date.now(),
-    }));
-
-    // AI 回合
-    if (mode === 'pva' && !isGameOver && gameState.currentPlayer === 'black') {
-      isAiThinking.current = true;
-      setTimeout(() => {
-        const aiMove = makeAIMove(newBoard);
-        if (aiMove) {
-          handleCellClick(aiMove);
-        }
-        isAiThinking.current = false;
-      }, 500);
-    }
-  }, [gameState, mode, makeAIMove, checkGameEnd]);
-
-  // 悔棋
-  const handleUndo = useCallback(() => {
-    if (gameState.moves.length === 0 || gameState.status !== 'playing') return;
-    if (isAiThinking.current) return;
-
-    const newBoard = createEmptyBoard(15);
-    const moves = gameState.moves.slice(0, -1);
-    moves.forEach((move) => {
-      newBoard[move.position.row][move.position.col] = move.player;
-    });
-
-    setGameState(prev => ({
-      ...prev,
-      board: newBoard,
-      currentPlayer: moves.length > 0 
-        ? (moves[moves.length - 1].player === 'black' ? 'white' : 'black')
-        : 'black',
-      moves,
-      winner: null,
-      updatedAt: Date.now(),
-    }));
-    setWinningLine([]);
-  }, [gameState]);
-
-  // 重新开始
-  const handleRestart = useCallback(() => {
-    setGameState({
-      id: Date.now().toString(),
-      board: createEmptyBoard(15),
-      currentPlayer: 'black',
-      status: 'playing',
-      moves: [],
-      winner: null,
-      mode,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-    setWinningLine([]);
-    isAiThinking.current = false;
-  }, [mode]);
-
-  // 模式切换时重置
-  useEffect(() => {
-    handleRestart();
-  }, [mode, handleRestart]);
+  const handleCellClick = async (position: { row: number; col: number }) => {
+    await makeMove(position);
+  };
 
   const getStatusMessage = (): string => {
     if (gameState.status === 'black_win') return '🎉 黑方获胜!';
     if (gameState.status === 'white_win') return '🎉 白方获胜!';
     if (gameState.status === 'draw') return '🤝 平局!';
+    if (isAIMoving) return '🤖 AI 正在思考...';
     return `${gameState.currentPlayer === 'black' ? '⚫' : '⚪'} ${gameState.currentPlayer === 'black' ? '黑方' : '白方'} 回合`;
   };
 
   return (
     <div className="max-w-2xl mx-auto">
+      {/* 错误提示 */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-100 text-red-800 rounded-lg flex justify-between items-center">
+          <span>{error}</span>
+          <button onClick={clearError} className="text-red-600 hover:text-red-800 font-bold">
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* 状态显示 */}
       <div className={`
         text-center py-4 mb-4 rounded-lg font-bold text-lg
         ${gameState.status.includes('win') ? 'bg-green-100 text-green-800' : ''}
@@ -189,19 +55,22 @@ export default function Game({ mode, onModeChange }: GameProps) {
         {getStatusMessage()}
       </div>
 
+      {/* 棋盘 */}
       <Board 
         board={gameState.board}
         onCellClick={handleCellClick}
         lastMove={gameState.moves[gameState.moves.length - 1]?.position}
         winningLine={winningLine}
+        disabled={isAIMoving}
       />
 
+      {/* 控制面板 */}
       <Controls 
-        onUndo={handleUndo}
-        onRestart={handleRestart}
-        onModeChange={onModeChange}
+        onUndo={undoMove}
+        onRestart={restartGame}
+        onModeChange={setGameMode}
         currentMode={mode}
-        canUndo={gameState.moves.length > 0 && gameState.status === 'playing' && !isAiThinking.current}
+        canUndo={gameState.moves.length > 0 && gameState.status === 'playing' && !isAIMoving}
       />
     </div>
   );

@@ -1,21 +1,21 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   GameState,
   GameConfig,
   Position,
-  Move,
   Player,
   GameStatus,
+  Move,
   BoardData,
 } from '../types';
 import {
   createEmptyBoard,
   checkWin,
   checkDraw,
-  copyBoard,
   getNextPlayer,
   defaultGameConfig,
 } from '../utils/gameLogic';
+import { getAIMove } from '../utils/deepseek';
 
 interface UseGameReturn {
   gameState: GameState;
@@ -39,7 +39,7 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
   const [gameState, setGameState] = useState<GameState>(() => {
     const size = config.boardSize;
     return {
-      id: crypto.randomUUID(),
+      id: Date.now().toString(),
       board: createEmptyBoard(size),
       currentPlayer: 'black',
       status: 'playing',
@@ -54,57 +54,33 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
   const [winningLine, setWinningLine] = useState<Position[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isAIMoving, setIsAIMoving] = useState(false);
+  const makeMoveRef = useRef<((position: Position) => Promise<boolean>) | null>(null);
 
   // 检查游戏是否结束
   const checkGameEnd = useCallback(
-    (board: BoardData, lastMove: Position, player: Player): GameStatus => {
-      const { win, winningLine: line } = checkWin(
-        board,
-        lastMove,
-        player,
-        config.winCondition
-      );
+    (board: BoardData, lastMove: Position, player: Player): { status: GameStatus; winningLine: Position[] } => {
+      const { win, winningLine: line } = checkWin(board, lastMove, player, config.winCondition);
       
       if (win) {
-        setWinningLine(line);
-        return `${player}_win` as GameStatus;
+        return { status: `${player}_win` as GameStatus, winningLine: line };
       }
       
       if (checkDraw(board)) {
-        return 'draw';
+        return { status: 'draw' as GameStatus, winningLine: [] };
       }
       
-      return 'playing';
+      return { status: 'playing' as GameStatus, winningLine: [] };
     },
     [config.winCondition]
   );
 
-  // 调用 AI API 获取落子建议
+  // 调用 AI 获取落子建议
   const callAI = useCallback(
     async (board: BoardData, currentPlayer: 'black' | 'white'): Promise<Position | null> => {
       try {
         setIsAIMoving(true);
-        const response = await fetch('/api/ai-move', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            board,
-            currentPlayer,
-            boardSize: config.boardSize,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`AI API 错误: ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (data.success && data.position) {
-          return data.position;
-        }
-        return null;
+        const position = await getAIMove(board, currentPlayer, config.boardSize);
+        return position;
       } catch (err) {
         console.error('AI 调用失败:', err);
         return null;
@@ -126,10 +102,10 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
       // AI 落子
       const timer = setTimeout(async () => {
         const aiPosition = await callAI(gameState.board, gameState.currentPlayer);
-        if (aiPosition) {
-          makeMove(aiPosition);
+        if (aiPosition && makeMoveRef.current) {
+          await makeMoveRef.current(aiPosition);
         }
-      }, 500); // 延迟 500ms 让用户体验更好
+      }, 500);
 
       return () => clearTimeout(timer);
     }
@@ -139,11 +115,11 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
     gameState.board,
     config.mode,
     isAIMoving,
-    callAI
+    callAI,
   ]);
 
   // 落子
-  const makeMove = useCallback(
+  const makeMoveFn = useCallback(
     async (position: Position): Promise<boolean> => {
       // 验证游戏状态
       if (gameState.status !== 'playing') {
@@ -174,7 +150,13 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
       }
 
       // 执行落子
-      const newBoard = copyBoard(gameState.board);
+      const newBoard = createEmptyBoard(config.boardSize);
+      for (let r = 0; r < config.boardSize; r++) {
+        for (let c = 0; c < config.boardSize; c++) {
+          newBoard[r][c] = gameState.board[r][c];
+        }
+      }
+
       const player = gameState.currentPlayer;
       newBoard[position.row][position.col] = player;
 
@@ -185,20 +167,20 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
       };
 
       const newMoves = [...gameState.moves, newMove];
-      const newStatus = checkGameEnd(newBoard, position, player);
-      const winner = newStatus.includes('_win')
-        ? player
-        : newStatus === 'draw'
-        ? null
-        : null;
+      const { status: newStatus, winningLine: newWinningLine } = checkGameEnd(
+        newBoard,
+        position,
+        player
+      );
 
+      setWinningLine(newWinningLine);
       setGameState((prev) => ({
         ...prev,
         board: newBoard,
         currentPlayer: getNextPlayer(player),
         status: newStatus,
         moves: newMoves,
-        winner,
+        winner: newStatus.includes('_win') ? player : newStatus === 'draw' ? null : null,
         updatedAt: Date.now(),
       }));
 
@@ -206,6 +188,11 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
     },
     [gameState, config, checkGameEnd, isAIMoving]
   );
+
+  // 设置 ref 以便在 useEffect 中调用
+  useEffect(() => {
+    makeMoveRef.current = makeMoveFn;
+  }, [makeMoveFn]);
 
   // 悔棋
   const undoMove = useCallback((): boolean => {
@@ -219,12 +206,14 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
       return false;
     }
 
-    const newMoves = gameState.moves.slice(0, -1);
-    const lastMove = newMoves[newMoves.length - 1];
-    const newBoard = createEmptyBoard(config.boardSize);
+    if (isAIMoving) {
+      setError('AI 正在思考中，无法悔棋');
+      return false;
+    }
 
-    // 重新构建棋盘
-    newMoves.forEach((move) => {
+    const newBoard = createEmptyBoard(config.boardSize);
+    const moves = gameState.moves.slice(0, -1);
+    moves.forEach((move) => {
       newBoard[move.position.row][move.position.col] = move.player;
     });
 
@@ -232,18 +221,21 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
     setGameState((prev) => ({
       ...prev,
       board: newBoard,
-      currentPlayer: lastMove ? getNextPlayer(lastMove.player) : 'black',
-      moves: newMoves,
+      currentPlayer: moves.length > 0 
+        ? (moves[moves.length - 1].player === 'black' ? 'white' : 'black')
+        : 'black',
+      moves,
+      winner: null,
       updatedAt: Date.now(),
     }));
 
     return true;
-  }, [gameState.moves, gameState.status, config.boardSize]);
+  }, [gameState.moves, gameState.status, config.boardSize, isAIMoving]);
 
   // 重新开始
   const restartGame = useCallback(() => {
     setGameState({
-      id: crypto.randomUUID(),
+      id: Date.now().toString(),
       board: createEmptyBoard(config.boardSize),
       currentPlayer: 'black',
       status: 'playing',
@@ -276,7 +268,7 @@ export const useGame = (initialConfig?: Partial<GameConfig>): UseGameReturn => {
   return {
     gameState,
     config,
-    makeMove,
+    makeMove: makeMoveFn,
     undoMove,
     restartGame,
     setGameMode,

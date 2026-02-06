@@ -7,13 +7,15 @@ interface BoardProps {
   onCellClick: (position: Position) => void;
   lastMove?: Position;
   winningLine?: Position[];
+  disabled?: boolean;
 }
 
 const Board: React.FC<BoardProps> = ({ 
   board, 
   onCellClick, 
   lastMove,
-  winningLine 
+  winningLine,
+  disabled = false
 }) => {
   const boardSize = board.length;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -100,14 +102,14 @@ const Board: React.FC<BoardProps> = ({
           row.map((cell, colIndex) => (
             <div
               key={rowIndex + '-' + colIndex}
-              className="absolute cursor-pointer hover:bg-yellow-500/20 transition-colors z-10"
+              className={`absolute z-10 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-yellow-500/20 transition-colors'}`}
               style={{
                 left: colIndex * cellSize,
                 top: rowIndex * cellSize,
                 width: cellSize,
                 height: cellSize,
               }}
-              onClick={() => onCellClick({ row: rowIndex, col: colIndex })}
+              onClick={() => !disabled && onCellClick({ row: rowIndex, col: colIndex })}
             >
               {cell && (
                 <div

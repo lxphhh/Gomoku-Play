@@ -12,19 +12,12 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/ws': {
-        target: 'ws://localhost:3000',
-        ws: true,
-      },
-    },
   },
   build: {
     outDir: 'dist',
     sourcemap: true,
   },
+  // 环境变量配置
+  // 前端环境变量必须以 VITE_ 开头
+  envPrefix: 'VITE_',
 });

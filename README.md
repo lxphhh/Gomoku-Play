@@ -1,167 +1,105 @@
-# Gomoku-Play 🎮
+# Gomoku-Play 五子棋游戏
 
-Full-stack Gomoku (Five in a Row) game built with React, Express, TypeScript, and WebSocket.
+一个基于 React + TypeScript + Vite 的五子棋游戏，支持 PvP（双人对战）和 PvA（人机对战）。
 
-## Features
+## 技术栈
 
-- 🏆 **Multiple Game Modes**
-  - Player vs Player (Local)
-  - Player vs AI (Simple Bot)
-  - Online PvP (Coming Soon)
+- **前端框架**: React 18
+- **构建工具**: Vite 5
+- **语言**: TypeScript 5
+- **样式**: Tailwind CSS 3
+- **AI 对接**: DeepSeek API（前端直接调用）
 
-- 🎨 **Modern UI**
-  - Clean, responsive design with Tailwind CSS
-  - Smooth animations and transitions
-  - Mobile-friendly interface
+## 项目结构
 
-- ⚡ **Real-time Updates**
-  - WebSocket support for live multiplayer
-  - Instant game state synchronization
+```
+Gomoku-Play/
+├── frontend/                 # 前端项目（前后端不分离）
+│   ├── src/
+│   │   ├── components/        # React 组件
+│   │   │   ├── Board.tsx     # 棋盘组件
+│   │   │   ├── Controls.tsx  # 控制面板组件
+│   │   │   └── Game.tsx      # 游戏主组件
+│   │   ├── hooks/
+│   │   │   └── useGame.ts    # 游戏逻辑 Hook
+│   │   ├── utils/
+│   │   │   ├── gameLogic.ts  # 游戏逻辑工具函数
+│   │   │   └── deepseek.ts   # DeepSeek AI 对接
+│   │   ├── types/
+│   │   │   └── index.ts      # TypeScript 类型定义
+│   │   ├── App.tsx           # 应用入口组件
+│   │   └── main.tsx          # 应用入口
+│   ├── index.html            # HTML 模板
+│   ├── vite.config.ts        # Vite 配置
+│   └── package.json
+├── backend/                  # 后端项目（保留但不使用）
+│   └── ...
+└── package.json              # 根目录 package.json
+```
 
-- 🔧 **Developer Friendly**
-  - Full TypeScript support
-  - Monorepo structure
-  - ESLint + Prettier configured
-  - Hot reload development
+## 功能特性
 
-## Tech Stack
+### ✅ 已完成
+- 🎮 **PvP 双人对战**: 黑白棋轮流下
+- 🤖 **PvA 人机对战**: 白棋由 DeepSeek AI 控制
+- 🏆 **胜负判定**: 连成 5 子获胜
+- ↩️ **悔棋功能**: 可撤销最后一步
+- 🔄 **重新开始**: 重置游戏
+- 📱 **响应式设计**: 适配移动端
 
-### Frontend
-- React 18+ with TypeScript
-- Vite for fast builds
-- Tailwind CSS for styling
-- Custom hooks for game logic
+### AI 对接
+- 前端直接调用 DeepSeek API，无需后端
+- 环境变量配置（Vercel 中配置）
 
-### Backend
-- Express.js with TypeScript
-- WebSocket (ws) for real-time communication
-- RESTful API architecture
-- Simple AI opponent
+## 开发
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js >= 18.0.0
-- npm or pnpm
-
-### Installation
+### 安装依赖
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/Gomoku-Play.git
-cd Gomoku-Play
-
-# Install dependencies
+cd frontend
 npm install
-
-# Start development servers
-npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173` and the backend at `http://localhost:3001`.
-
-### Available Scripts
+### 开发模式
 
 ```bash
-# Start both frontend and backend
+cd frontend
 npm run dev
+```
 
-# Start only frontend
-npm run dev:frontend
+### 构建生产版本
 
-# Start only backend
-npm run dev:backend
-
-# Build for production
+```bash
+cd frontend
 npm run build
-
-# Lint code
-npm run lint
-
-# Format code
-npm run format
 ```
 
-## Project Structure
+## 环境变量
 
-```
-gomoku-play/
-├── frontend/              # React frontend application
-│   ├── src/
-│   │   ├── components/   # React components
-│   │   ├── hooks/        # Custom React hooks
-│   │   ├── types/        # TypeScript type definitions
-│   │   ├── utils/        # Utility functions
-│   │   └── styles/       # Global styles
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── backend/              # Express backend application
-│   ├── src/
-│   │   ├── controllers/  # Route controllers
-│   │   ├── middleware/   # Express middleware
-│   │   ├── models/       # Data models
-│   │   ├── routes/       # API routes
-│   │   ├── services/     # Business logic
-│   │   ├── types/        # TypeScript definitions
-│   │   └── utils/        # Utility functions
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── package.json           # Root workspace package.json
-├── tsconfig.json          # TypeScript configuration
-├── .eslintrc.cjs          # ESLint configuration
-├── .prettierrc            # Prettier configuration
-└── README.md              # Project documentation
-```
+在 Vercel 项目中配置以下环境变量：
 
-## Game Rules
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `VITE_DEEPSEEK_API_URL` | DeepSeek API 地址 | `https://api.deepseek.com` |
+| `VITE_DEEPSEEK_API_KEY` | DeepSeek API Key | - |
+| `VITE_DEEPSEEK_MODEL` | 模型名称 | `deepseek-chat` |
+| `VITE_DEEPSEEK_TIMEOUT` | 超时时间(ms) | `60000` |
 
-Gomoku (Five in a Row) is a traditional board game:
+## 部署
 
-1. Players take turns placing stones (black first)
-2. First player to align 5 stones horizontally, vertically, or diagonally wins
-3. Standard rules apply (no overlines for casual play)
+### Vercel 部署
 
-## API Endpoints
+1. 将代码推送到 GitHub
+2. 在 Vercel 中导入项目
+3. 配置环境变量
+4. Vercel 自动部署
 
-### REST API
+### 注意事项
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Health check |
-| POST | `/api/games` | Create a new game |
-| GET | `/api/games/:id` | Get game state |
-| POST | `/api/games/:id/move` | Make a move |
-| POST | `/api/games/:id/undo` | Request undo |
-| POST | `/api/games/:id/restart` | Restart game |
-
-### WebSocket Events
-
-| Event | Direction | Description |
-|-------|-----------|-------------|
-| `join` | Client → Server | Join a game room |
-| `move` | Client → Server | Send a move |
-| `gameState` | Server → Client | Receive game state |
-| `gameOver` | Server → Client | Game ended notification |
-| `undoRequest` | Bidirectional | Request to undo move |
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat(scope): add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- 前端环境变量必须以 `VITE_` 开头
+- `.env` 文件不会上传到 Git（已在 .gitignore 中配置）
+- 部署后访问域名即可游戏
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [React](https://reactjs.org/)
-- [Express](https://expressjs.com/)
-- [Vite](https://vitejs.dev/)
-- [Tailwind CSS](https://tailwindcss.com/)
+MIT
